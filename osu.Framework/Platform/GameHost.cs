@@ -489,6 +489,16 @@ namespace osu.Framework.Platform
 
         private bool didRenderFrame;
 
+        /// <summary>
+        /// Aligns draw frames to the display's refreshes when using <see cref="FrameSync.VSyncVRR"/>, if the renderer can tell when frames are shown.
+        /// </summary>
+        private DisplayPhaseLock displayPhaseLock;
+
+        /// <summary>
+        /// The frame rate to run at while draw frames aren't aligned to the display's refreshes by the <see cref="displayPhaseLock"/>, or zero if it shouldn't be used.
+        /// </summary>
+        private double displayPhaseLockUnalignedFrameRate;
+
         protected virtual void DrawFrame()
         {
             Debug.Assert(Window != null);
@@ -517,6 +527,28 @@ namespace osu.Framework.Platform
                 // Furthermore, don't wait when in VRR mode as we want to be the ones in control of pacing the monitor's refresh cycle.
                 if (didRenderFrame && !isVrr)
                     Renderer.WaitUntilNextFrameReady();
+
+                double unalignedFrameRate = displayPhaseLockUnalignedFrameRate;
+
+                if (unalignedFrameRate > 0)
+                {
+                    double refreshRate = Window.CurrentDisplayMode.Value.RefreshRate;
+
+                    if (displayPhaseLock == null)
+                    {
+                        var presentationFeedback = Renderer.PresentationFeedback;
+                        Debug.Assert(presentationFeedback != null);
+
+                        displayPhaseLock = new DisplayPhaseLock(presentationFeedback);
+                    }
+
+                    displayPhaseLock.WaitForNextFrame(refreshRate > 0 ? refreshRate : 60, unalignedFrameRate);
+                }
+                else
+                {
+                    displayPhaseLock?.Dispose();
+                    displayPhaseLock = null;
+                }
 
                 didRenderFrame = false;
                 buffer = drawRoots.GetForRead(IsActive.Value ? TripleBuffer<DrawNode>.DEFAULT_READ_TIMEOUT : 0);
@@ -1060,6 +1092,9 @@ namespace osu.Framework.Platform
 
                     veldridRenderer.Device.UpdateActiveDisplay(bounds.X, bounds.Y, bounds.Width, bounds.Height);
                 }
+
+                // another display may refresh at different times and in a different manner, even if at the same rate.
+                displayPhaseLock?.Recalibrate();
             }, true);
 
             IsActive.BindTo(Window.IsActive);
@@ -1344,6 +1379,8 @@ namespace osu.Framework.Platform
 
             setVSyncMode();
 
+            displayPhaseLockUnalignedFrameRate = 0;
+
             switch (frameSyncMode.Value)
             {
                 case FrameSync.VSync:
@@ -1357,6 +1394,16 @@ namespace osu.Framework.Platform
                     // periodic stutters on fixed refresh rate displays.
                     drawLimiter = Math.Min(refreshRate * 0.985, Math.Max(refreshRate - 2, 0));
                     updateLimiter = drawLimiter * 4;
+
+                    // If the renderer can tell when frames are shown, draw frames are instead paced by aligning them to the display's refreshes.
+                    // This reduces latency further on displays which can vary their refresh interval, but not freely.
+                    // Not done in single thread mode, where waiting right before drawing would only delay showing the result of the preceding update.
+                    if (executionMode.Value == ExecutionMode.MultiThreaded && Renderer.IsInitialised && Renderer.PresentationFeedback != null)
+                    {
+                        displayPhaseLockUnalignedFrameRate = drawLimiter;
+                        drawLimiter = int.MaxValue;
+                    }
+
                     break;
 
                 case FrameSync.Limit2x:
@@ -1432,6 +1479,8 @@ namespace osu.Framework.Platform
 
                     break;
             }
+
+            displayPhaseLock?.Dispose();
 
             AppDomain.CurrentDomain.UnhandledException -= unhandledExceptionHandler;
             TaskScheduler.UnobservedTaskException -= unobservedExceptionHandler;
