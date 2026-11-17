@@ -43,6 +43,8 @@ namespace osu.Framework.Graphics.Rendering
         protected internal abstract bool VerticalSync { get; set; }
         protected internal abstract bool AllowTearing { get; set; }
 
+        protected internal virtual IPresentationFeedback? PresentationFeedback => null;
+
         protected internal Storage? CacheStorage
         {
             set => shaderCompilationStore.CacheStorage = value;
@@ -1205,6 +1207,8 @@ namespace osu.Framework.Graphics.Rendering
             get => AllowTearing;
             set => AllowTearing = value;
         }
+
+        IPresentationFeedback? IRenderer.PresentationFeedback => PresentationFeedback;
 
         Storage? IRenderer.CacheStorage
         {

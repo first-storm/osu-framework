@@ -58,6 +58,12 @@ namespace osu.Framework.Graphics.Rendering
         protected internal bool AllowTearing { get; set; }
 
         /// <summary>
+        /// Reports when presented frames finished rendering and when they were actually shown on the display,
+        /// or <c>null</c> if this isn't supported by this renderer.
+        /// </summary>
+        protected internal IPresentationFeedback? PresentationFeedback { get; }
+
+        /// <summary>
         /// A <see cref="Storage"/> that can be used to cache objects.
         /// </summary>
         protected internal Storage? CacheStorage { set; }

@@ -164,6 +164,8 @@ namespace osu.Framework.Graphics.Rendering.Deferred
             set => VeldridDevice.AllowTearing = value;
         }
 
+        protected internal override IPresentationFeedback? PresentationFeedback => VeldridDevice.PresentationFeedback;
+
         public override bool IsDepthRangeZeroToOne
             => VeldridDevice.IsDepthRangeZeroToOne;
 
