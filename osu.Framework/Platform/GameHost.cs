@@ -1402,6 +1402,11 @@ namespace osu.Framework.Platform
                     {
                         displayPhaseLockUnalignedFrameRate = drawLimiter;
                         drawLimiter = int.MaxValue;
+
+                        // Draw frames are started right before they need to be, using whatever the most recent update frame is at that point.
+                        // Run updates as fast as is sane to keep it from being any older than necessary.
+                        // Beyond that, frames have been observed to be on time more consistently this way (on macOS), for reasons not yet understood.
+                        updateLimiter = maximum_sane_fps;
                     }
 
                     break;
