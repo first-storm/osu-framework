@@ -59,6 +59,12 @@ namespace osu.Framework.Graphics.Veldrid
         }
 
         /// <summary>
+        /// Reports when presented frames finished rendering and when they were actually shown on the display,
+        /// or <c>null</c> if this isn't supported by the graphics backend.
+        /// </summary>
+        public Rendering.IPresentationFeedback? PresentationFeedback { get; }
+
+        /// <summary>
         /// Whether the depth is in the range [0, 1] (i.e. Reversed-Z). If <c>false</c>, depth is in the range [-1, 1].
         /// </summary>
         public bool IsDepthRangeZeroToOne
@@ -215,6 +221,9 @@ namespace osu.Framework.Graphics.Veldrid
             }
 
             Logger.Log($"{nameof(UseStructuredBuffers)}: {UseStructuredBuffers}");
+
+            if (Device.PresentationFeedback != null)
+                PresentationFeedback = new VeldridPresentationFeedback(Device.PresentationFeedback);
 
             MaxTextureSize = maxTextureSize;
         }
