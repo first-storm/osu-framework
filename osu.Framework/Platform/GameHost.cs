@@ -489,6 +489,16 @@ namespace osu.Framework.Platform
 
         private bool didRenderFrame;
 
+        /// <summary>
+        /// Aligns draw frames to the display's refreshes when using <see cref="FrameSync.VSyncVRR"/> on a display which can only vary its refresh interval in steps.
+        /// </summary>
+        private DisplayRefreshAligner displayRefreshAligner;
+
+        /// <summary>
+        /// The frame rate to fall back to while draw frames can't be aligned by the <see cref="displayRefreshAligner"/>, or zero if it shouldn't be used.
+        /// </summary>
+        private double displayRefreshAlignerFallbackFrameRate;
+
         protected virtual void DrawFrame()
         {
             Debug.Assert(Window != null);
@@ -517,6 +527,21 @@ namespace osu.Framework.Platform
                 // Furthermore, don't wait when in VRR mode as we want to be the ones in control of pacing the monitor's refresh cycle.
                 if (didRenderFrame && !isVrr)
                     Renderer.WaitUntilNextFrameReady();
+
+                double fallbackFrameRate = displayRefreshAlignerFallbackFrameRate;
+
+                if (fallbackFrameRate > 0)
+                {
+                    double refreshRate = Window.CurrentDisplayMode.Value.RefreshRate;
+
+                    displayRefreshAligner ??= new DisplayRefreshAligner(Renderer.PresentationFeedback);
+                    displayRefreshAligner.WaitForNextFrame(refreshRate > 0 ? refreshRate : 60, fallbackFrameRate);
+                }
+                else
+                {
+                    displayRefreshAligner?.Dispose();
+                    displayRefreshAligner = null;
+                }
 
                 didRenderFrame = false;
                 buffer = drawRoots.GetForRead(IsActive.Value ? TripleBuffer<DrawNode>.DEFAULT_READ_TIMEOUT : 0);
@@ -1349,6 +1374,8 @@ namespace osu.Framework.Platform
 
             setVSyncMode();
 
+            displayRefreshAlignerFallbackFrameRate = 0;
+
             switch (frameSyncMode.Value)
             {
                 case FrameSync.VSync:
@@ -1362,6 +1389,17 @@ namespace osu.Framework.Platform
                     // periodic stutters on fixed refresh rate displays.
                     drawLimiter = Math.Min(refreshRate * 0.985, Math.Max(refreshRate - 2, 0));
                     updateLimiter = drawLimiter * 4;
+
+                    // Some displays can only vary their refresh interval in steps. Running slightly below the refresh rate doesn't work as intended on those,
+                    // as there is no such refresh interval. Instead, run at exactly the refresh rate with each frame timed to be finished just ahead of its refresh.
+                    // Not done in single thread mode, where waiting right before drawing would only delay showing the result of the preceding update.
+                    if (DisplayUpdateGranularity > 0 && executionMode.Value == ExecutionMode.MultiThreaded && Renderer.IsInitialised && Renderer.PresentationFeedback != null)
+                    {
+                        displayRefreshAlignerFallbackFrameRate = drawLimiter;
+                        drawLimiter = int.MaxValue;
+                        updateLimiter = maximum_sane_fps;
+                    }
+
                     break;
 
                 case FrameSync.Limit2x:
@@ -1423,6 +1461,8 @@ namespace osu.Framework.Platform
                 return;
 
             isDisposed = true;
+
+            displayRefreshAligner?.Dispose();
 
             switch (ExecutionState)
             {
