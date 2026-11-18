@@ -49,6 +49,8 @@ namespace osu.Framework.Platform.MacOS
         public override IResourceStore<TextureUpload> CreateTextureLoaderStore(IResourceStore<byte[]> underlyingStore)
             => new MacOSTextureLoaderStore(underlyingStore);
 
+        protected override double DisplayUpdateGranularity => NSScreen.MainScreen().DisplayUpdateGranularity;
+
         protected override void Swap()
         {
             base.Swap();

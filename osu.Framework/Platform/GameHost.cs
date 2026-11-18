@@ -1328,6 +1328,11 @@ namespace osu.Framework.Platform
         /// </summary>
         private const int maximum_sane_fps = GameThread.DEFAULT_ACTIVE_HZ;
 
+        /// <summary>
+        /// The step (in seconds) in which the current display can vary its refresh interval, or zero if it can refresh at any time (or this isn't known).
+        /// </summary>
+        protected virtual double DisplayUpdateGranularity => 0;
+
         private void updateFrameSyncMode()
         {
             if (Window == null)
